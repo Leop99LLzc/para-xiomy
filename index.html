@@ -1,17 +1,32 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>🌹 Feliz Cumpleaños Xiomy</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+
+  <!--
+    ESTRATEGIA RESPONSIVE MOBILE-FIRST
+    ───────────────────────────────────
+    • #app  → wrapper relativo, altura fijada por JS a window.innerHeight
+              (evita el bug de iOS Safari con 100vh y la barra de navegación)
+    • canvas → position: absolute dentro de #app  (NO fixed)
+    • .rose-zone → position: absolute dentro de #app (NO fixed)
+    • #letter-overlay → position: fixed fuera de #app (único fixed permitido)
+    • SIN overflow:hidden en html/body (causa pantalla en blanco en Android)
+    • SIN "inset" shorthand (no soportado en Android < 87)
+    • Canvas escalado con devicePixelRatio para pantallas Retina nítidas
+  -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lato:wght@300;400;700&display=swap"
+        rel="stylesheet" />
 
   <style>
-    /* ══════════════════════════════════
-       RESET Y VARIABLES
-    ══════════════════════════════════ */
+    /* ══════════════════════════════════════════
+       RESET MÍNIMO
+    ══════════════════════════════════════════ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -19,278 +34,285 @@
       --rose-dark:  #8b1a3c;
       --rose-mid:   #f8b4c0;
       --gold:       #c9a96e;
-      --text-muted: #a06070;
-      --text-main:  #5a1a30;
+      --muted:      #a06070;
       --ease:       cubic-bezier(0.4, 0, 0.2, 1);
       --spring:     cubic-bezier(0.34, 1.25, 0.64, 1);
     }
 
-    html, body {
-      width: 100%; height: 100%;
+    /* html/body: SIN overflow:hidden, SIN height:100%
+       Eso causa pantalla en blanco en navegadores móviles */
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #ffe4e1;
+      /* Evita el overscroll-bounce de iOS mostrando el color del fondo */
+      overscroll-behavior: none;
+    }
+
+    /* ══════════════════════════════════════════
+       #APP — Contenedor raíz
+       Su altura se fija con JS a window.innerHeight
+       para que funcione correctamente en iOS Safari
+       (la barra de navegación no roba espacio)
+    ══════════════════════════════════════════ */
+    #app {
+      position: relative;
+      width: 100%;
+      /* Fallback rápido hasta que JS calcule la altura */
+      min-height: 100vh;
       overflow: hidden;
-      font-family: 'Lato', sans-serif;
-      /* Fondo en gradiente radial suave */
       background:
-        radial-gradient(ellipse 80% 55% at 15% 8%,  #ffd6e0 0%, transparent 55%),
+        radial-gradient(ellipse 80% 55% at 15%  8%, #ffd6e0 0%, transparent 55%),
         radial-gradient(ellipse 65% 45% at 85% 92%, #fecdd3 0%, transparent 55%),
         #ffe4e1;
-      color: var(--text-main);
     }
 
-    /* ══════════════════════════════════
-       CAPAS DE Z-INDEX
-       1  → canvas (partículas, detrás de todo)
-       2  → escena principal (texto, sobre)
-       3  → zonas de toque de rosas
-       20 → frases flotantes
-       50 → overlay de la carta
-       60 → confeti
-    ══════════════════════════════════ */
-
-    /* ── Canvas de partículas ── */
-    #main-canvas {
-      position: fixed; inset: 0;
+    /* ── Canvas (detrás de todo, sin pointer-events) ── */
+    #cvs {
+      position: absolute;
+      top: 0; left: 0;
+      /* El tamaño real (px) se controla desde JS con devicePixelRatio.
+         CSS sólo define que ocupe el 100% visual del contenedor. */
       width: 100%; height: 100%;
       z-index: 1;
-      pointer-events: none; /* nunca intercepta toques */
-    }
-
-    /* ── Escena principal ── */
-    .scene {
-      position: fixed; inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start; /* arriba para dejar rosas abajo */
-      padding: clamp(1.2rem, 7vh, 3rem) 1.5rem 0;
-      z-index: 2;
-      pointer-events: none; /* hijos activan pointer-events cuando necesitan */
-    }
-
-    /* ── Cabecera decorativa ── */
-    #header-dec {
-      text-align: center;
-      margin-bottom: 0.6rem;
-      transition: opacity 0.6s var(--ease), transform 0.6s var(--ease);
-    }
-
-    .page-subtitle {
-      font-family: 'Playfair Display', serif;
-      font-style: italic;
-      font-size: clamp(0.9rem, 4vw, 1.1rem);
-      color: var(--rose-deep);
-      letter-spacing: 0.06em;
-      margin-bottom: 0.45rem;
-      opacity: 0;
-      animation: fadeSlideIn 0.9s 0.3s ease forwards;
-    }
-
-    .page-divider {
-      width: 48px; height: 1px;
-      background: linear-gradient(90deg, transparent, var(--rose-mid), transparent);
-      margin: 0 auto;
-      opacity: 0;
-      animation: fadeSlideIn 0.9s 0.5s ease forwards;
-    }
-
-    /* ── Texto guía ── */
-    #guide-text {
-      font-weight: 300;
-      font-size: clamp(0.8rem, 3.8vw, 1rem);
-      color: var(--text-muted);
-      text-align: center;
-      max-width: 290px;
-      line-height: 1.65;
-      margin-top: 0.5rem;
-      opacity: 0;
-      animation: fadeSlideIn 0.9s 0.7s ease forwards;
-      transition: opacity 0.5s var(--ease);
       pointer-events: none;
     }
 
-    /* ══════════════════════════════════
+    /* ══════════════════════════════════════════
+       CONTENIDO — Columna centrada arriba
+    ══════════════════════════════════════════ */
+    #content {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;           /* toma la altura del #app */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      /* Padding top: deja espacio para el notch y empieza el texto */
+      padding: clamp(1.4rem, 8vh, 3.5rem) 1.25rem 0;
+      /* pointer-events: none para que los clicks pasen al canvas y zonas de toque */
+      pointer-events: none;
+    }
+
+    /* ── Cabecera decorativa ── */
+    #hdr {
+      text-align: center;
+      margin-bottom: 0.6rem;
+      transition: opacity 0.55s var(--ease), transform 0.55s var(--ease);
+    }
+
+    .subtitle {
+      font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+      font-style: italic;
+      font-size: clamp(0.9rem, 4.2vw, 1.15rem);
+      color: var(--rose-deep);
+      letter-spacing: 0.06em;
+      opacity: 0;
+      animation: fadeIn 0.85s 0.35s ease forwards;
+    }
+
+    .divider {
+      width: 46px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--rose-mid), transparent);
+      margin: 0.4rem auto 0;
+      opacity: 0;
+      animation: fadeIn 0.85s 0.55s ease forwards;
+    }
+
+    /* ── Texto guía ── */
+    #guide {
+      font-weight: 300;
+      font-size: clamp(0.82rem, 4vw, 1rem);
+      color: var(--muted);
+      text-align: center;
+      max-width: 280px;
+      line-height: 1.65;
+      margin-top: 0.55rem;
+      opacity: 0;
+      animation: fadeIn 0.85s 0.75s ease forwards;
+      /* La transición JS de fade-out/in usa esta propiedad */
+      transition: opacity 0.48s var(--ease);
+    }
+
+    /* ══════════════════════════════════════════
        ZONAS DE TOQUE — ROSAS
-    ══════════════════════════════════ */
-    .rose-zone {
-      position: fixed;
-      width: 90px; height: 90px;
+       position: absolute dentro de #app
+       El JS las posiciona igual que el canvas
+    ══════════════════════════════════════════ */
+    .rz {
+      position: absolute;   /* NO fixed — relativo a #app */
+      width: 88px;
+      height: 88px;
       border-radius: 50%;
       z-index: 3;
       transform: translate(-50%, -50%);
       cursor: pointer;
+      /* Elimina el flash azul en Android */
       -webkit-tap-highlight-color: transparent;
-      background: transparent;
     }
 
-    /* Anillo pulsante: hint de interactividad */
-    .rose-zone::after {
+    /* Anillo pulsante: hint de que es interactivo */
+    .rz::after {
       content: '';
-      position: absolute; inset: 0;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
       border-radius: 50%;
-      border: 2px solid rgba(214, 62, 106, 0);
-      animation: ringPulse 2.4s ease-in-out infinite;
+      border: 2px solid transparent;
+      animation: ring 2.5s ease-in-out infinite;
     }
 
-    @keyframes ringPulse {
-      0%   { transform: scale(0.85); border-color: rgba(214,62,106,0);    }
-      50%  { transform: scale(1.2);  border-color: rgba(214,62,106,0.40); }
-      100% { transform: scale(0.85); border-color: rgba(214,62,106,0);    }
+    @keyframes ring {
+      0%   { transform: scale(0.82); border-color: rgba(214,62,106,0);   }
+      50%  { transform: scale(1.22); border-color: rgba(214,62,106,0.42); }
+      100% { transform: scale(0.82); border-color: rgba(214,62,106,0);   }
     }
 
-    /* ══════════════════════════════════
+    /* ══════════════════════════════════════════
        FASE 2 — SOBRE
-    ══════════════════════════════════ */
-    #envelope-wrap {
-      display: none;
-      margin-top: 1.4rem;
+    ══════════════════════════════════════════ */
+    #env-wrap {
+      display: none;           /* visible desde JS */
+      margin-top: 1.5rem;
       opacity: 0;
-      transform: scale(0.82) translateY(18px);
+      transform: scale(0.82) translateY(14px);
       transition: opacity 0.85s var(--ease), transform 0.85s var(--ease);
       pointer-events: none;
     }
-
-    #envelope-wrap.visible {
+    #env-wrap.show {
       opacity: 1;
       transform: scale(1) translateY(0);
       pointer-events: auto;
     }
 
-    .envelope-scene {
+    .env-scene {
       perspective: 900px;
       width: min(250px, 78vw);
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
 
-    .envelope-body {
+    .env-body {
       position: relative;
       width: 100%;
-      padding-top: 63%;
+      padding-top: 63%;        /* ratio del sobre */
       background: #fff3ee;
       border-radius: 4px 4px 12px 12px;
       box-shadow:
-        0 14px 48px rgba(180,60,80,0.20),
-        0 3px 12px rgba(180,60,80,0.10),
+        0 14px 46px rgba(180,60,80,0.18),
+        0 3px 10px  rgba(180,60,80,0.10),
         inset 0 -4px 0 #e8c4b8;
     }
 
     /* Líneas diagonales internas */
-    .envelope-body::before {
+    .env-body::before {
       content: '';
-      position: absolute; inset: 0;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
       border-radius: 4px 4px 12px 12px;
       background:
         linear-gradient(135deg, transparent 49%, #e8c4b8 49%, #e8c4b8 51%, transparent 51%),
         linear-gradient(225deg, transparent 49%, #e8c4b8 49%, #e8c4b8 51%, transparent 51%);
-      opacity: 0.32;
+      opacity: 0.3;
     }
 
-    /* Ícono central */
-    .envelope-icon {
-      position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Playfair Display', serif;
-      font-size: clamp(1.6rem, 6vw, 2.1rem);
+    .env-icon {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(1.5rem, 6vw, 2rem);
       color: var(--rose-mid);
       padding-top: 14%;
       pointer-events: none;
     }
 
     /* ── Solapa triangular ── */
-    .envelope-flap {
+    .env-flap {
       position: absolute;
       top: 0; left: 0;
-      width: 100%; height: 56%;
+      width: 100%; height: 57%;
       background: linear-gradient(162deg, #ffd6e0 0%, #f8b4c0 100%);
       clip-path: polygon(0% 0%, 100% 0%, 50% 90%);
       transform-origin: top center;
       transform-style: preserve-3d;
-      transition: transform 0.88s var(--ease);
+      transition: transform 0.9s var(--ease);
       z-index: 10;
       border-radius: 4px 4px 0 0;
     }
-
-    /* Brillo en solapa */
-    .envelope-flap::after {
+    .env-flap::after {
       content: '';
-      position: absolute; inset: 0;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
       clip-path: polygon(0% 0%, 100% 0%, 50% 90%);
-      background: linear-gradient(180deg, rgba(255,255,255,0.24) 0%, transparent 52%);
+      background: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 52%);
     }
+    .env-flap.open { transform: rotateX(188deg); }
 
-    .envelope-flap.open { transform: rotateX(188deg); }
-
-    /* ══════════════════════════════════
-       FASE 3 — CARTA (Bottom Sheet)
-       Solución definitiva: overlay fijo
-       encima de todo, sin depender del
-       tamaño del sobre.
-    ══════════════════════════════════ */
-    #letter-overlay {
-      position: fixed; inset: 0;
+    /* ══════════════════════════════════════════
+       FASE 3 — CARTA (Bottom Sheet, position:fixed)
+       Único elemento en position:fixed.
+       Está FUERA de #app para no ser cortado.
+    ══════════════════════════════════════════ */
+    #letter {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
       z-index: 50;
       display: flex;
       align-items: flex-end;
       justify-content: center;
       pointer-events: none;
       opacity: 0;
-      background: rgba(90, 20, 40, 0);
-      transition:
-        opacity 0.7s var(--ease),
-        background 0.7s var(--ease);
+      background: rgba(90,20,40,0);
+      transition: opacity 0.65s var(--ease), background 0.65s var(--ease);
     }
-
-    #letter-overlay.visible {
+    #letter.show {
       opacity: 1;
       pointer-events: auto;
-      background: rgba(90, 20, 40, 0.30);
+      background: rgba(90,20,40,0.28);
     }
 
-    /* Tarjeta de la carta: bottom sheet */
     .letter-card {
       width: min(430px, 97vw);
+      /* Carta toma hasta 80% de la altura real de la ventana */
       max-height: 80vh;
       background: #fffaf8;
       border-radius: 22px 22px 0 0;
-      padding: 1.6rem 1.6rem clamp(2rem, 6vh, 3.5rem);
+      /* padding-bottom extra para el safe-area de iPhone (notch inferior) */
+      padding: 1.6rem 1.6rem calc(1.8rem + env(safe-area-inset-bottom, 0px));
       transform: translateY(100%);
       transition: transform 1s var(--spring);
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      /* Líneas sutiles de papel */
       background-image: repeating-linear-gradient(
         to bottom,
         transparent, transparent 27px,
         rgba(201,169,110,0.07) 27px, rgba(201,169,110,0.07) 28px
       );
-      box-shadow:
-        0 -12px 55px rgba(180,60,80,0.22),
-        inset 0 0 0 1.5px rgba(201,169,110,0.22);
+      box-shadow: 0 -10px 50px rgba(180,60,80,0.22);
     }
+    #letter.show .letter-card { transform: translateY(0); }
 
-    #letter-overlay.visible .letter-card { transform: translateY(0); }
-
-    /* Handle (barra gris tipo bottom sheet) */
-    .letter-handle {
+    .l-handle {
       width: 36px; height: 4px;
       background: var(--rose-mid);
       border-radius: 2px;
       margin: 0 auto 1.5rem;
-      opacity: 0.45;
+      opacity: 0.4;
     }
 
-    /* Contenido */
-    .letter-content { text-align: center; }
+    .l-body { text-align: center; }
 
-    .letter-emoji {
-      font-size: clamp(1.8rem, 7vw, 2.4rem);
+    .l-emoji {
       display: block;
+      font-size: clamp(1.8rem, 7vw, 2.4rem);
       margin-bottom: 0.8rem;
       animation: bounceIn 0.7s 1s ease both;
     }
 
-    .letter-content h1 {
-      font-family: 'Playfair Display', serif;
+    .l-body h1 {
+      font-family: 'Playfair Display', Georgia, serif;
       font-size: clamp(1.2rem, 6.5vw, 1.65rem);
       font-weight: 600;
       color: var(--rose-dark);
@@ -298,319 +320,561 @@
       margin-bottom: 1rem;
     }
 
-    .letter-content p {
+    .l-body p {
       font-weight: 300;
-      font-size: clamp(0.86rem, 3.9vw, 1rem);
-      color: var(--text-muted);
+      font-size: clamp(0.88rem, 4vw, 1rem);
+      color: var(--muted);
       line-height: 1.85;
-      margin-bottom: 1.3rem;
+      margin-bottom: 1.2rem;
     }
 
-    .letter-signature {
-      font-family: 'Playfair Display', serif;
+    .l-sign {
+      font-family: 'Playfair Display', Georgia, serif;
       font-style: italic;
-      font-size: clamp(0.82rem, 3.5vw, 0.95rem);
+      font-size: clamp(0.82rem, 3.6vw, 0.95rem);
       color: var(--gold);
-      margin-top: 0.2rem;
     }
 
-    .heart-beat {
+    .heartbeat {
       display: inline-block;
-      font-size: clamp(1.6rem, 7vw, 2.2rem);
-      margin: 0.4rem 0 0.6rem;
-      animation: heartbeat 1.1s ease-in-out infinite;
+      font-size: clamp(1.7rem, 7vw, 2.2rem);
+      margin: 0.4rem 0 0.7rem;
+      animation: hb 1.1s ease-in-out infinite;
     }
 
-    /* ══════════════════════════════════
-       FRASES FLOTANTES
-    ══════════════════════════════════ */
-    .float-phrase {
-      position: fixed;
-      font-family: 'Playfair Display', serif;
+    /* ══════════════════════════════════════════
+       FRASE FLOTANTE
+    ══════════════════════════════════════════ */
+    .phrase {
+      position: fixed;        /* fixed para que se vea sobre todo */
+      font-family: 'Playfair Display', Georgia, serif;
       font-style: italic;
-      font-size: clamp(0.88rem, 4.5vw, 1.1rem);
+      font-size: clamp(0.9rem, 4.6vw, 1.1rem);
       color: var(--rose-dark);
       text-shadow: 0 1px 10px rgba(255,255,255,0.95);
       pointer-events: none;
       white-space: nowrap;
-      z-index: 20;
+      z-index: 25;
       transform: translateX(-50%);
       animation: floatUp 2.6s ease-out forwards;
     }
 
-    @keyframes floatUp {
-      0%   { opacity: 0; transform: translateX(-50%) translateY(0)     scale(0.75); }
-      18%  { opacity: 1; transform: translateX(-50%) translateY(-20px)  scale(1.06); }
-      82%  { opacity: 0.75; transform: translateX(-50%) translateY(-100px) scale(1); }
-      100% { opacity: 0; transform: translateX(-50%) translateY(-130px) scale(0.9); }
-    }
-
-    /* ══════════════════════════════════
+    /* ══════════════════════════════════════════
        CONFETI
-    ══════════════════════════════════ */
-    .confetti-piece {
+    ══════════════════════════════════════════ */
+    .confetti {
       position: fixed;
-      top: -18px;
+      top: -16px;
       pointer-events: none;
       z-index: 60;
-      animation: confettiFall linear forwards;
+      animation: fall linear forwards;
     }
 
-    @keyframes confettiFall {
-      0%   { transform: translateY(0) rotate(0deg) scaleX(1); opacity: 1; }
-      80%  { opacity: 0.85; }
-      100% { transform: translateY(105vh) rotate(720deg) scaleX(0.3); opacity: 0; }
+    /* ══════════════════════════════════════════
+       KEYFRAMES
+    ══════════════════════════════════════════ */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0);    }
     }
-
-    /* ══════════════════════════════════
-       ANIMACIONES GLOBALES
-    ══════════════════════════════════ */
-    @keyframes fadeSlideIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to   { opacity: 1; transform: translateY(0); }
+    @keyframes floatUp {
+      0%   { opacity: 0;    transform: translateX(-50%) translateY(0)      scale(.78); }
+      16%  { opacity: 1;    transform: translateX(-50%) translateY(-18px)   scale(1.06); }
+      80%  { opacity: 0.75; transform: translateX(-50%) translateY(-100px)  scale(1);   }
+      100% { opacity: 0;    transform: translateX(-50%) translateY(-130px)  scale(.9);  }
     }
-
-    @keyframes heartbeat {
+    @keyframes hb {
       0%  { transform: scale(1);    }
       14% { transform: scale(1.28); }
       28% { transform: scale(1);    }
       42% { transform: scale(1.16); }
       70% { transform: scale(1);    }
     }
-
     @keyframes bounceIn {
-      from { opacity: 0; transform: scale(0.4); }
+      from { opacity: 0; transform: scale(.4); }
       60%  { transform: scale(1.15); }
       to   { opacity: 1; transform: scale(1); }
     }
-
-    /* Accesibilidad */
-    .visually-hidden {
-      position: absolute; width: 1px; height: 1px;
-      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+    @keyframes fall {
+      0%   { transform: translateY(0)      rotate(0deg)   scaleX(1);  opacity: 1;   }
+      80%  { opacity: 0.8; }
+      100% { transform: translateY(105vh)  rotate(720deg) scaleX(.3); opacity: 0;   }
     }
   </style>
 </head>
 <body>
-  <h1 class="visually-hidden">Tarjeta de cumpleaños interactiva para Xiomy</h1>
 
-  <!-- ── Canvas (rosas de partículas, z=1) ── -->
-  <canvas id="main-canvas"></canvas>
+  <!-- ════════════════════════════════
+       CONTENEDOR PRINCIPAL
+       Su alto se fija en JS con window.innerHeight
+       para sortear el bug de iOS con 100vh
+  ════════════════════════════════ -->
+  <div id="app">
 
-  <!-- ── Escena principal (z=2) ── -->
-  <main class="scene">
+    <!-- Canvas de partículas (z=1, pointer-events:none) -->
+    <canvas id="cvs"></canvas>
 
-    <div id="header-dec">
-      <p class="page-subtitle" aria-hidden="true">para Xiomy ✦</p>
-      <div class="page-divider" aria-hidden="true"></div>
-    </div>
+    <!-- Columna de contenido (z=2) -->
+    <div id="content">
 
-    <p id="guide-text" role="status" aria-live="polite">
-      🌹 Xiomy, limpia el camino para descubrir tu sorpresa...
-    </p>
+      <!-- Cabecera decorativa -->
+      <div id="hdr">
+        <p class="subtitle">para Xiomy ✦</p>
+        <div class="divider"></div>
+      </div>
 
-    <!-- Sobre (Fase 2, oculto al inicio) -->
-    <div id="envelope-wrap" aria-label="Sobre con carta">
-      <div class="envelope-scene" id="envelope-scene"
-           role="button" tabindex="0"
-           aria-label="Sobre cerrado — tócalo para abrir">
-        <div class="envelope-body">
-          <div class="envelope-flap" id="envelope-flap" aria-hidden="true"></div>
-          <div class="envelope-icon" aria-hidden="true">✉</div>
+      <!-- Texto guía -->
+      <p id="guide" role="status" aria-live="polite">
+        🌹 Xiomy, limpia el camino para descubrir tu sorpresa...
+      </p>
+
+      <!-- Sobre (Fase 2) -->
+      <div id="env-wrap">
+        <div class="env-scene" id="env-scene"
+             role="button" tabindex="0"
+             aria-label="Sobre cerrado — tócalo para abrir">
+          <div class="env-body">
+            <div class="env-flap" id="env-flap"></div>
+            <div class="env-icon">✉</div>
+          </div>
         </div>
       </div>
-    </div>
 
-  </main>
+    </div><!-- /content -->
 
-  <!-- ── Carta (z=50, bottom sheet fijo) ── -->
-  <div id="letter-overlay" aria-hidden="true" role="dialog" aria-label="Carta de cumpleaños para Xiomy">
+    <!-- Zonas de toque de rosas (z=3, absolute dentro de #app) -->
+    <div id="rz0" class="rz" role="button" tabindex="0" aria-label="Rosa 1 — tócala"></div>
+    <div id="rz1" class="rz" role="button" tabindex="0" aria-label="Rosa 2 — tócala"></div>
+    <div id="rz2" class="rz" role="button" tabindex="0" aria-label="Rosa 3 — tócala"></div>
+
+  </div><!-- /app -->
+
+  <!-- ════════════════════════════════
+       CARTA — position:fixed, fuera de #app
+       para que nunca sea cortada por overflow
+  ════════════════════════════════ -->
+  <div id="letter" aria-hidden="true" role="dialog" aria-label="Carta de cumpleaños">
     <div class="letter-card">
-      <div class="letter-handle" aria-hidden="true"></div>
-      <div class="letter-content">
-        <span class="letter-emoji" aria-hidden="true">🎂🌹🎉</span>
+      <div class="l-handle"></div>
+      <div class="l-body">
+        <span class="l-emoji">🎂🌹🎉</span>
         <h1>¡¡Feliz Cumpleaños<br>Xiomy!!</h1>
-        <p>
-          Te deseo un día increíble, lleno de risas,
-          amor y momentos hermosos.
-          ¡Te mereces lo mejor hoy y siempre!
-        </p>
-        <div class="heart-beat" role="img" aria-label="Corazón palpitante">❤️</div>
-        <p class="letter-signature">Con todo el cariño del mundo 🌹</p>
+        <p>Te deseo un día increíble, lleno de risas, amor y momentos hermosos. ¡Te mereces lo mejor hoy y siempre!</p>
+        <div class="heartbeat" role="img" aria-label="Corazón palpitante">❤️</div>
+        <p class="l-sign">Con todo el cariño del mundo 🌹</p>
       </div>
     </div>
   </div>
 
-  <!-- ── Zonas de toque para rosas (z=3, posicionadas por JS) ── -->
-  <div id="rose-zone-0" class="rose-zone" role="button" tabindex="0" aria-label="Rosa 1 — tócala"></div>
-  <div id="rose-zone-1" class="rose-zone" role="button" tabindex="0" aria-label="Rosa 2 — tócala"></div>
-  <div id="rose-zone-2" class="rose-zone" role="button" tabindex="0" aria-label="Rosa 3 — tócala"></div>
-
   <script>
-    'use strict';
+  /* ════════════════════════════════════════════════════
+     CONFIGURACIÓN Y ESTADO
+  ════════════════════════════════════════════════════ */
+  const app     = document.getElementById('app');
+  const cvs     = document.getElementById('cvs');
+  const ctx     = cvs.getContext('2d');
+  const guide   = document.getElementById('guide');
+  const hdr     = document.getElementById('hdr');
+  const envWrap = document.getElementById('env-wrap');
+  const envFlap = document.getElementById('env-flap');
+  const envScene= document.getElementById('env-scene');
+  const letter  = document.getElementById('letter');
 
-    /* ═══════════════════════════════════════════════════
-       CANVAS
-    ═══════════════════════════════════════════════════ */
-    const canvas = document.getElementById('main-canvas');
-    const ctx    = canvas.getContext('2d');
-    let W = 0, H = 0;
+  const PHRASES = [
+    '¡Eres súper fuerte! 💪',
+    '¡Eres inteligentísima! 🧠✨',
+    '¡Eres increíblemente única! ❤️'
+  ];
+  const CONF_COLORS = ['#f8b4c0','#d63e6a','#c9a96e','#f9d5e5',
+                       '#ffcba4','#a8d8ea','#b5e7a0','#fce38a','#ff6b9d'];
+  const P_COLORS    = ['#d63e6a','#e91e63','#f06292','#f8bbd0',
+                       '#fce4ec','#c9a96e','#ff6b9d','#f48fb1','#ff80ab'];
 
-    function resizeCanvas() {
-      W = canvas.width  = window.innerWidth;
-      H = canvas.height = window.innerHeight;
+  let AW = 0, AH = 0, DPR = 1;   // dimensiones del canvas lógicas
+  let phase    = 1;
+  let killed   = 0;
+  let envOpen  = false;
+  let looping  = true;
+  let roses    = [];
+
+  /* ════════════════════════════════════════════════════
+     DIMENSIONADO RESPONSIVE
+     Se llama al inicio y en cada resize.
+     Usa window.innerHeight (NO 100vh) para evitar
+     el bug de iOS Safari con la barra de navegación.
+  ════════════════════════════════════════════════════ */
+  function setDimensions() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    DPR     = window.devicePixelRatio || 1;
+
+    /* Fija el alto de #app a la altura real visible */
+    app.style.height = H + 'px';
+
+    /* Dimensiones lógicas del canvas (para dibujar) */
+    AW = W;
+    AH = H;
+
+    /* Dimensiones físicas del canvas (píxeles reales) */
+    cvs.width  = W * DPR;
+    cvs.height = H * DPR;
+
+    /* Escala el contexto para que las coordenadas
+       lógicas coincidan con los px CSS y con las
+       posiciones CSS de las zonas de toque */
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  /* ════════════════════════════════════════════════════
+     POSICIONES DE LAS ROSAS
+     Retorna coordenadas lógicas (px CSS) relativas
+     al origen de #app (top-left).
+  ════════════════════════════════════════════════════ */
+  function rosePos(idx) {
+    return [
+      { x: AW * 0.20, y: AH * 0.66 },
+      { x: AW * 0.50, y: AH * 0.57 },
+      { x: AW * 0.80, y: AH * 0.66 }
+    ][idx];
+  }
+
+  /* Mueve las zonas de toque CSS a la posición de cada rosa */
+  function placeZone(idx, x, y) {
+    const z = document.getElementById('rz' + idx);
+    if (z) { z.style.left = x + 'px'; z.style.top = y + 'px'; }
+  }
+
+  /* ════════════════════════════════════════════════════
+     CURVA ROSA — FORMA DE LAS PARTÍCULAS
+     r = R · |cos(2θ)|  →  4 pétalos simétricos
+  ════════════════════════════════════════════════════ */
+  function roseShape(cx, cy) {
+    const pts = [];
+    const N   = 68;
+
+    /* Pétalos */
+    const np = Math.floor(N * 0.54);
+    for (let i = 0; i < np; i++) {
+      const t = (i / np) * Math.PI * 2;
+      const r = 30 * Math.abs(Math.cos(2 * t));
+      pts.push({ x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) * 0.78 });
     }
-    resizeCanvas();
-    window.addEventListener('resize', () => {
-      resizeCanvas();
-      if (currentPhase === 1) roses.forEach((r, i) => {
-        const p = getRosePos(i);
-        r.cx = p.x; r.cy = p.y;
-        setZonePos(i, p.x, p.y);
+    /* Relleno interior */
+    const nf = Math.floor(N * 0.30);
+    for (let i = 0; i < nf; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * 14;
+      pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+    }
+    /* Núcleo central */
+    for (let i = 0, nc = N - np - nf; i < nc; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 5;
+      pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+    }
+    return pts;
+  }
+
+  /* Color por distancia al centro: dorado → rosa claro → rosa intenso */
+  function ptColor(ox, oy) {
+    const d = Math.hypot(ox, oy);
+    if (d < 6)  return '#c9a96e';
+    if (d < 15) return ['#f8bbd0','#fce4ec','#f48fb1'][Math.random()*3|0];
+    return P_COLORS[Math.random() * P_COLORS.length | 0];
+  }
+
+  /* ════════════════════════════════════════════════════
+     CREAR UNA ROSA
+  ════════════════════════════════════════════════════ */
+  function makeRose(idx, cx, cy, delay) {
+    const targets = roseShape(cx, cy);
+    const now     = performance.now();
+    const parts   = targets.map((t, i) => {
+      const ox = t.x - cx;
+      const oy = t.y - cy;
+      const ia = Math.random() * Math.PI * 2;
+      const id = 160 + Math.random() * 220;
+      return {
+        x: cx + Math.cos(ia) * id,   /* posición inicial dispersa */
+        y: cy + Math.sin(ia) * id,
+        ox, oy,                       /* offset desde centro */
+        sz:    2.4 + Math.random() * 3.6,
+        col:   ptColor(ox, oy),
+        op:    0,
+        spd:   0.052 + Math.random() * 0.04,
+        st:    'wait',                /* wait→asm→float→boom */
+        at:    now + delay + i * 14, /* momento de arrancar */
+        fa:    Math.random() * Math.PI * 2,
+        fs:    0.007 + Math.random() * 0.012,
+        fr:    0.8 + Math.random() * 2.2,
+        vx: 0, vy: 0
+      };
+    });
+    return { idx, cx, cy, parts, lt: Math.random()*Math.PI*2, ly:0, alive:true, built:false };
+  }
+
+  /* ════════════════════════════════════════════════════
+     INIT ROSAS
+  ════════════════════════════════════════════════════ */
+  function initRoses() {
+    roses = [0,1,2].map(i => {
+      const p = rosePos(i);
+      placeZone(i, p.x, p.y);
+      return makeRose(i, p.x, p.y, i * 370);
+    });
+  }
+
+  /* ════════════════════════════════════════════════════
+     UPDATE — física por frame
+  ════════════════════════════════════════════════════ */
+  function update(now) {
+    roses.forEach(rose => {
+      if (rose.alive) {
+        rose.lt += 0.016;
+        rose.ly  = Math.sin(rose.lt) * 10;
+      }
+      let allDone = true;
+
+      rose.parts.forEach(p => {
+        if (p.st === 'wait') {
+          if (now >= p.at) p.st = 'asm'; else allDone = false; return;
+        }
+        if (p.st === 'asm') {
+          allDone = false;
+          p.op = Math.min(1, p.op + 0.055);
+          const tx = rose.cx + p.ox;
+          const ty = rose.cy + p.oy;
+          p.x += (tx - p.x) * p.spd;
+          p.y += (ty - p.y) * p.spd;
+          if ((tx-p.x)**2 + (ty-p.y)**2 < 0.9 && p.op >= 0.97) {
+            p.x = tx; p.y = ty; p.st = 'float';
+          }
+          return;
+        }
+        if (p.st === 'float') {
+          p.fa += p.fs;
+          /* posición = centro + offset + micro-orbital + levitación global */
+          p.x = rose.cx + p.ox + Math.cos(p.fa) * p.fr;
+          p.y = rose.cy + p.oy + Math.sin(p.fa) * p.fr + rose.ly;
+          return;
+        }
+        if (p.st === 'boom') {
+          p.x  += p.vx;
+          p.y  += p.vy;
+          p.vy += 0.22;         /* gravedad */
+          p.vx *= 0.97;         /* fricción */
+          p.op  = Math.max(0, p.op - 0.026);
+          p.sz  = Math.max(0,  p.sz  * 0.975);
+        }
+      });
+
+      if (allDone && !rose.built) rose.built = true;
+    });
+  }
+
+  /* ════════════════════════════════════════════════════
+     DRAW — renderizado en canvas
+  ════════════════════════════════════════════════════ */
+  function draw() {
+    ctx.clearRect(0, 0, AW, AH);
+
+    roses.forEach(rose => {
+      /* Glow suave cuando la rosa está ensamblada */
+      if (rose.built && rose.alive) {
+        const gx = rose.cx, gy = rose.cy + rose.ly;
+        const g  = ctx.createRadialGradient(gx, gy, 2, gx, gy, 50);
+        g.addColorStop(0, 'rgba(255,120,160,0.18)');
+        g.addColorStop(1, 'rgba(255,120,160,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(gx, gy, 50, 0, Math.PI*2);
+        ctx.fill();
+      }
+      /* Partículas */
+      rose.parts.forEach(p => {
+        if (p.op < 0.01) return;
+        ctx.globalAlpha = p.op;
+        ctx.fillStyle   = p.col;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(0.1, p.sz), 0, Math.PI*2);
+        ctx.fill();
       });
     });
 
-    /* ═══════════════════════════════════════════════════
-       ESTADO GLOBAL
-    ═══════════════════════════════════════════════════ */
-    let currentPhase    = 1;
-    let eliminated      = 0;
-    let envelopeOpen    = false;
-    let animRunning     = true;
-    let roses           = [];
+    ctx.globalAlpha = 1;
+  }
 
-    /* ═══════════════════════════════════════════════════
-       COLORES DE PARTÍCULAS
-       Distribuidos por distancia al centro de la rosa:
-       centro=dorado → medio=rosa claro → pétalos=rosa intenso
-    ═══════════════════════════════════════════════════ */
-    function roseParticleColor(ox, oy) {
-      const d = Math.sqrt(ox * ox + oy * oy);
-      if (d < 6)  return '#c9a96e';                                          // centro dorado
-      if (d < 14) return ['#f8bbd0','#fce4ec','#f48fb1'][Math.random()*3|0]; // anillo interior rosa claro
-      return ['#d63e6a','#e91e63','#f06292','#ff6b9d'][Math.random()*4|0];   // pétalos rosas intensos
+  /* ════════════════════════════════════════════════════
+     LOOP PRINCIPAL
+  ════════════════════════════════════════════════════ */
+  function loop(now) {
+    if (!looping) return;
+    update(now);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  /* ════════════════════════════════════════════════════
+     ACCIONES DE JUEGO
+  ════════════════════════════════════════════════════ */
+
+  /* Frase que asciende desde (x, y) */
+  function spawnPhrase(x, y, txt) {
+    const el = document.createElement('span');
+    el.className   = 'phrase';
+    el.textContent = txt;
+    el.style.left  = x + 'px';
+    el.style.top   = (y - 10) + 'px';
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }
+
+  /* Explota las partículas de una rosa */
+  function boom(idx) {
+    const rose = roses[idx];
+    if (!rose || !rose.alive) return;
+    rose.alive = false;
+    rose.parts.forEach(p => {
+      p.st = 'boom';
+      const dx = p.x - rose.cx;
+      const dy = p.y - rose.cy;
+      const d  = Math.hypot(dx, dy) || 1;
+      const s  = 3.5 + Math.random() * 8;
+      p.vx = (dx/d)*s + (Math.random()-.5)*2.5;
+      p.vy = (dy/d)*s - (1.5 + Math.random()*4.5);
+    });
+    const z = document.getElementById('rz'+idx);
+    if (z) { z.style.pointerEvents='none'; z.style.animationName='none'; }
+  }
+
+  /* Toque sobre una rosa */
+  function tapRose(idx) {
+    if (!roses[idx] || !roses[idx].alive) return;
+    const r = roses[idx];
+    spawnPhrase(r.cx, r.cy, PHRASES[idx]);
+    boom(idx);
+    killed++;
+    if (killed === 3) setTimeout(goPhase2, 820);
+  }
+
+  /* ── Fase 2: aparece el sobre ── */
+  function goPhase2() {
+    phase = 2;
+    [0,1,2].forEach(i => {
+      const z = document.getElementById('rz'+i);
+      if (z) z.style.display = 'none';
+    });
+    /* Colapsa la cabecera para liberar espacio en el sobre */
+    hdr.style.opacity   = '0';
+    hdr.style.transform = 'translateY(-8px)';
+    setTimeout(() => hdr.style.display = 'none', 580);
+
+    fadeGuide('✉️ ¡Has encontrado una carta! Tócala para abrirla...');
+
+    envWrap.style.display = 'block';
+    void envWrap.offsetWidth;  /* fuerza reflow → activa la transición CSS */
+    envWrap.classList.add('show');
+    setTimeout(() => envScene.focus(), 900);
+  }
+
+  /* ── Fase 3: abre el sobre + muestra carta ── */
+  function goPhase3() {
+    if (envOpen || phase !== 2) return;
+    envOpen = true;
+    phase   = 3;
+
+    envFlap.classList.add('open');
+    fadeGuide('🎉 ¡Con todo el cariño del mundo!');
+
+    setTimeout(() => {
+      letter.classList.add('show');
+      letter.setAttribute('aria-hidden', 'false');
+    }, 780);
+
+    setTimeout(confetti, 1150);
+    setTimeout(() => { looping = false; ctx.clearRect(0,0,AW,AH); }, 3800);
+    envScene.style.cursor = 'default';
+  }
+
+  /* Fade guía: opacidad 0 → cambia texto → opacidad 1 */
+  function fadeGuide(txt) {
+    guide.style.opacity = '0';
+    setTimeout(() => { guide.textContent = txt; guide.style.opacity = '1'; }, 510);
+  }
+
+  /* ════════════════════════════════════════════════════
+     CONFETI
+  ════════════════════════════════════════════════════ */
+  function confetti() {
+    for (let i = 0; i < 80; i++) {
+      setTimeout(() => {
+        const el  = document.createElement('div');
+        const sz  = 6 + Math.random() * 9;
+        el.className = 'confetti';
+        el.style.cssText = [
+          'left:'              + (Math.random()*100) + 'vw',
+          'width:'             + sz + 'px',
+          'height:'            + sz*(Math.random()>.5?1:1.8) + 'px',
+          'background:'        + CONF_COLORS[Math.random()*CONF_COLORS.length|0],
+          'border-radius:'     + (Math.random()>.5?'50%':'2px'),
+          'animation-duration:'+ (2+Math.random()*2.6) + 's',
+          'animation-delay:'   + (Math.random()*.5) + 's'
+        ].join(';');
+        document.body.appendChild(el);
+        el.addEventListener('animationend', () => el.remove(), { once: true });
+      }, i * 38);
     }
+  }
 
-    /* ═══════════════════════════════════════════════════
-       POSICIONES DE LAS 3 ROSAS
-       (parte inferior del viewport, bien separadas)
-    ═══════════════════════════════════════════════════ */
-    function getRosePos(idx) {
-      // Las rosas ocupan la mitad inferior para no tapar el texto
-      const positions = [
-        { x: W * 0.20, y: H * 0.66 },
-        { x: W * 0.50, y: H * 0.58 },
-        { x: W * 0.80, y: H * 0.66 }
-      ];
-      return positions[idx];
-    }
+  /* ════════════════════════════════════════════════════
+     EVENTOS DE USUARIO
+  ════════════════════════════════════════════════════ */
+  [0,1,2].forEach(i => {
+    const z = document.getElementById('rz'+i);
+    z.addEventListener('click',      ()  => tapRose(i));
+    z.addEventListener('touchstart', e   => { e.preventDefault(); tapRose(i); }, { passive: false });
+    z.addEventListener('keydown',    e   => {
+      if (e.key==='Enter'||e.key===' ') { e.preventDefault(); tapRose(i); }
+    });
+  });
 
-    /* ═══════════════════════════════════════════════════
-       FORMA DE LA ROSA — CURVA POLAR
-       r = R * |cos(2θ)|  →  4 pétalos
-    ═══════════════════════════════════════════════════ */
-    function generateRoseTargets(cx, cy) {
-      const targets = [];
-      const N = 68;
+  envScene.addEventListener('click',      goPhase3);
+  envScene.addEventListener('touchstart', e => { e.preventDefault(); goPhase3(); }, { passive: false });
+  envScene.addEventListener('keydown',    e => {
+    if (e.key==='Enter'||e.key===' ') { e.preventDefault(); goPhase3(); }
+  });
 
-      // ── Pétalos (curva rosa) ──
-      const nPetal = Math.floor(N * 0.55);
-      for (let i = 0; i < nPetal; i++) {
-        const t = (i / nPetal) * Math.PI * 2;
-        const r = 30 * Math.abs(Math.cos(2 * t));
-        targets.push({
-          x: cx + r * Math.cos(t),
-          y: cy + r * Math.sin(t) * 0.78 // achatado → roseta
+  /* ════════════════════════════════════════════════════
+     RESIZE — reposiciona todo al girar la pantalla
+  ════════════════════════════════════════════════════ */
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      setDimensions();
+      if (phase === 1) {
+        roses.forEach((r, i) => {
+          const p = rosePos(i);
+          r.cx = p.x; r.cy = p.y;
+          placeZone(i, p.x, p.y);
+          /* reposiciona partículas en estado float */
+          r.parts.forEach(p2 => {
+            if (p2.st === 'float') {
+              p2.x = r.cx + p2.ox;
+              p2.y = r.cy + p2.oy;
+            }
+          });
         });
       }
+    }, 120);
+  });
 
-      // ── Relleno interior ──
-      const nFill = Math.floor(N * 0.30);
-      for (let i = 0; i < nFill; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const r = Math.sqrt(Math.random()) * 14;
-        targets.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
-      }
-
-      // ── Núcleo central ──
-      const nCore = N - nPetal - nFill;
-      for (let i = 0; i < nCore; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const r = Math.random() * 5;
-        targets.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
-      }
-      return targets;
-    }
-
-    /* ═══════════════════════════════════════════════════
-       CREAR UNA ROSA
-    ═══════════════════════════════════════════════════ */
-    function createRose(idx, cx, cy, roseDelay) {
-      const targets = generateRoseTargets(cx, cy);
-      const now = performance.now();
-      const particles = targets.map((t, i) => {
-        const ox  = t.x - cx;
-        const oy  = t.y - cy;
-        // Posición inicial: dispersa alrededor del centro
-        const ia  = Math.random() * Math.PI * 2;
-        const id  = 170 + Math.random() * 220;
-        return {
-          x:          cx + Math.cos(ia) * id,  // posición actual X
-          y:          cy + Math.sin(ia) * id,  // posición actual Y
-          ox,                                   // offset X desde centro (para floating)
-          oy,                                   // offset Y desde centro
-          size:       2.4 + Math.random() * 3.6,
-          color:      roseParticleColor(ox, oy),
-          opacity:    0,
-          speed:      0.050 + Math.random() * 0.042,
-          state:      'waiting',                 // waiting→assembling→floating→exploding
-          readyAt:    now + roseDelay + i * 15, // ensamblaje escalonado partícula a partícula
-          floatAngle: Math.random() * Math.PI * 2,
-          floatSpeed: 0.007 + Math.random() * 0.012,
-          floatR:     0.8 + Math.random() * 2.2,
-          vx: 0, vy: 0
-        };
-      });
-      return { idx, cx, cy, particles, levTime: Math.random() * Math.PI * 2, levY: 0, active: true, assembled: false };
-    }
-
-    /* ── Inicializa las 3 rosas ── */
-    function initRoses() {
-      roses = [0, 1, 2].map(i => {
-        const pos  = getRosePos(i);
-        const rose = createRose(i, pos.x, pos.y, i * 380); // 380ms entre rosas
-        setZonePos(i, pos.x, pos.y);
-        return rose;
-      });
-    }
-
-    /* ── Posiciona una zona de toque ── */
-    function setZonePos(idx, x, y) {
-      const z = document.getElementById(`rose-zone-${idx}`);
-      if (z) { z.style.left = x + 'px'; z.style.top = y + 'px'; }
-    }
-
-    /* ═══════════════════════════════════════════════════
-       UPDATE — física de partículas
-    ═══════════════════════════════════════════════════ */
-    function update(now) {
-      roses.forEach(rose => {
-        // Levitación sinusoidal suave del conjunto
-        if (rose.active) {
-          rose.levTime += 0.016;
-          rose.levY     = Math.sin(rose.levTime) * 10;
-        }
-
-        let allReady = true;
-
-        rose.particles.forEach(p => {
-
-          if (p.state === 'waiting') {
-            if (now >= p.readyAt) p.state = 'assembling';
-            else allReady = false;
-            return;
-          }
-
-          if (p.state === 'assembling') {
-            allReady = false;
-            p.opacity = Math.min(1,
+  /* ════════════════════════════════════════════════════
+     ARRANQUE
+  ════════════════════════════════════════════════════ */
+  setDimensions();
+  initRoses();
+  requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
